@@ -1,0 +1,4 @@
+astra-spec @ git+https://github.com/LightconeResearch/astra-spec@proto/universes
+astra-tools @ git+https://github.com/LightconeResearch/astra-tools@proto/universes
+scikit-learn
+pytest

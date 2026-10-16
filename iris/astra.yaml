@@ -1,0 +1,116 @@
+id: iris_model_stability
+version: "0.0.14"
+name: Iris model stability
+description: |
+  RFC-0003's extended iris example (following the astra-spec iris example):
+  the macro-F1 of a classifier under two named universes - a random forest
+  and the same specification with an SVM and a comparison of the two.
+
+inputs:
+  - id: iris_data
+    type: data
+    source: sklearn.datasets.load_iris
+    description: Fisher's classic 150-sample, 3-class dataset
+
+outputs:
+  - id: trained_output
+    type: data
+    format: pkl
+    description: Best performing classifier
+    inputs: [iris_data]
+    decisions: [scaling, model, test_size, random_seed]
+    recipe:
+      command: >-
+        python src/train.py
+        --data {inputs.iris_data}
+        --scaling {decisions.scaling}
+        --model {decisions.model}
+        --test-size {decisions.test_size}
+        --seed {decisions.random_seed}
+        --out {output}
+
+  - id: f1_score
+    type: metric
+    format: json
+    description: Macro-averaged F1 score
+    inputs: [trained_output]
+    decisions: [scaling, model, test_size, random_seed]
+    recipe:
+      command: >-
+        python src/evaluate.py
+        --model {inputs.trained_output}
+        --out {output}
+
+  - id: model_comparison
+    type: metric
+    format: json
+    description: Accuracy by model and preprocessing combination
+    inputs:
+      - f1_score#rf_standard
+      - f1_score#svm_standard
+    recipe:
+      command: >-
+        python src/compare.py
+        --a {inputs.f1_score#rf_standard}
+        --b {inputs.f1_score#svm_standard}
+        --out {output}
+
+decisions:
+  scaling:
+    label: Feature Scaling
+    rationale: Scaling affects distance-based algorithms like SVM
+    options:
+      none:
+        label: No Scaling
+      standard:
+        label: StandardScaler
+      minmax:
+        label: MinMaxScaler
+        incompatible_with:
+          - model.svm
+
+  model:
+    label: Classification Model
+    rationale: Core algorithmic choice affecting accuracy and interpretability
+    options:
+      svm:
+        label: Support Vector Machine
+        requires:
+          - scaling.standard
+      random_forest:
+        label: Random Forest
+      logistic:
+        label: Logistic Regression
+
+  test_size:
+    label: Test Set Proportion
+    rationale: Trade-off between training data and evaluation reliability
+    options:
+      small:
+        label: "20%"
+      medium:
+        label: "30%"
+
+  random_seed:
+    label: Random Seed
+    rationale: For reproducibility and stability testing
+    options:
+      seed_42:
+        label: "42"
+      seed_123:
+        label: "123"
+
+universes:
+  - id: rf_standard
+    description: Random forest with standard scaling.
+    decisions:
+      scaling: standard
+      model: random_forest
+      test_size: small
+      random_seed: seed_42
+
+  - id: svm_standard
+    description: Same specification with the model switched to SVM.
+    derived_from: rf_standard
+    decisions:
+      model: svm
